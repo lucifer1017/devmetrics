@@ -1,0 +1,39 @@
+{
+  "name": "rootstock-dev-metrics",
+  "version": "1.0.0",
+  "description": "CLI tool that aggregates GitHub and Rootstock on-chain data for dApp developer health reports",
+  "main": "dist/index.js",
+  "bin": {
+    "devmetrics": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "prepare": "npm run build"
+  },
+  "keywords": [
+    "rootstock",
+    "github",
+    "metrics",
+    "cli",
+    "dapp",
+    "developer-tools"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "chalk": "^5.6.2",
+    "cli-table3": "^0.6.5",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.16.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
