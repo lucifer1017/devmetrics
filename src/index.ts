@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { GitHubService } from './services/github.service';
-import { RootstockService } from './services/rootstock.service';
+import { RootstockService, Network } from './services/rootstock.service';
 import { validateRepo, validateContractAddress } from './utils/validation';
 import { formatReport } from './formatters';
 import { DevMetricsReport, OutputFormat } from './types';
@@ -23,7 +23,8 @@ program
   .option('-f, --format <format>', 'Output format: table, json, or markdown', 'table')
   .option('--ci', 'CI/CD mode: outputs JSON format', false)
   .option('--github-token <token>', 'GitHub personal access token')
-  .option('--rpc-url <url>', 'Rootstock RPC URL')
+  .option('--network <network>', 'Rootstock network: mainnet or testnet', 'mainnet')
+  .option('--rpc-url <url>', 'Rootstock RPC URL (overrides network setting)')
   .parse(process.argv);
 
 interface Options {
@@ -32,11 +33,19 @@ interface Options {
   format?: string;
   ci?: boolean;
   githubToken?: string;
+  network?: string;
   rpcUrl?: string;
 }
 
 async function main() {
   const options = program.opts<Options>();
+
+  // Validate network option
+  if (options.network && !['mainnet', 'testnet'].includes(options.network.toLowerCase())) {
+    console.error(chalk.red(`Invalid network: ${options.network}. Must be 'mainnet' or 'testnet'`));
+    process.exit(1);
+  }
+  const network: Network = (options.network?.toLowerCase() as Network) || 'mainnet';
 
   // Determine output format
   let outputFormat: OutputFormat = 'table';
@@ -118,7 +127,37 @@ async function main() {
 
   // Initialize services
   const githubService = new GitHubService(options.githubToken);
-  const rootstockService = new RootstockService(options.rpcUrl);
+  const rootstockService = new RootstockService(options.rpcUrl, network);
+
+  // Show network info in table mode
+  if (outputFormat === 'table') {
+    console.log(chalk.cyan(`🌐 Rootstock Network: ${chalk.bold(rootstockService.getNetwork().toUpperCase())}`));
+    console.log(chalk.gray(`   RPC URL: ${rootstockService.getRpcUrl()}\n`));
+  }
+
+  // Check authentication status and show helpful message
+  if (!githubService.isAuthenticated() && outputFormat === 'table') {
+    console.log(chalk.yellow('\n⚠️  No GitHub token detected. Using unauthenticated mode (60 requests/hour limit).'));
+    console.log(chalk.yellow('   For 5,000 requests/hour, add GITHUB_TOKEN to your .env file.\n'));
+  }
+
+  // Show rate limit status if in table mode
+  if (outputFormat === 'table') {
+    try {
+      const rateLimit = await githubService.getRateLimitStatus();
+      if (rateLimit) {
+        const percentage = ((rateLimit.remaining / rateLimit.limit) * 100).toFixed(1);
+        const color = rateLimit.remaining < rateLimit.limit * 0.1 ? chalk.red : 
+                     rateLimit.remaining < rateLimit.limit * 0.3 ? chalk.yellow : chalk.green;
+        console.log(color(`📊 GitHub API: ${rateLimit.remaining}/${rateLimit.limit} requests remaining (${percentage}%)`));
+        if (rateLimit.remaining < rateLimit.limit * 0.2) {
+          console.log(chalk.yellow(`   Rate limit resets at: ${rateLimit.resetAt.toLocaleString()}`));
+        }
+      }
+    } catch {
+      // Silently fail if we can't get rate limit
+    }
+  }
 
   // Fetch metrics for all pairs
   const reports: DevMetricsReport[] = [];

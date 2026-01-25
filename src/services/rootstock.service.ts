@@ -1,12 +1,66 @@
 import { ethers } from 'ethers';
 import { RootstockMetrics } from '../types';
 
+export type Network = 'mainnet' | 'testnet';
+
 export class RootstockService {
   private provider: ethers.JsonRpcProvider;
+  private network: Network;
+  private rpcUrl: string;
 
-  constructor(rpcUrl?: string) {
-    const url = rpcUrl || process.env.ROOTSTOCK_RPC_URL || 'https://public-node.rsk.co';
-    this.provider = new ethers.JsonRpcProvider(url);
+  constructor(rpcUrl?: string, network?: Network) {
+    // Priority: explicit network parameter > network from rpcUrl > default mainnet
+    if (network) {
+      this.network = network;
+    } else if (rpcUrl) {
+      this.network = this.determineNetwork(rpcUrl);
+    } else {
+      this.network = 'mainnet'; // Default to mainnet
+    }
+    
+    // Get RPC URL: provided URL takes precedence over network-based URL
+    if (rpcUrl) {
+      this.rpcUrl = rpcUrl;
+    } else {
+      this.rpcUrl = this.getRpcUrlForNetwork(this.network);
+    }
+
+    this.provider = new ethers.JsonRpcProvider(this.rpcUrl);
+  }
+
+  /**
+   * Get the current network
+   */
+  getNetwork(): Network {
+    return this.network;
+  }
+
+  /**
+   * Get the RPC URL being used
+   */
+  getRpcUrl(): string {
+    return this.rpcUrl;
+  }
+
+  /**
+   * Determine network from RPC URL if not explicitly provided
+   */
+  private determineNetwork(rpcUrl?: string): Network {
+    if (rpcUrl) {
+      return rpcUrl.includes('testnet') ? 'testnet' : 'mainnet';
+    }
+    return 'mainnet'; // Default to mainnet
+  }
+
+  /**
+   * Get RPC URL for the specified network
+   */
+  private getRpcUrlForNetwork(network: Network): string {
+    if (network === 'testnet') {
+      return process.env.ROOTSTOCK_TESTNET_RPC_URL || 'https://public-node.testnet.rsk.co';
+    }
+    // mainnet
+    return process.env.ROOTSTOCK_MAINNET_RPC_URL || 'https://public-node.rsk.co';
   }
 
   async getMetrics(contractAddress: string): Promise<RootstockMetrics> {
