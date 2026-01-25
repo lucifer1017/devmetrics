@@ -10,7 +10,6 @@ export function formatAsTable(reports: DevMetricsReport[]): string {
     output.push(chalk.gray(`Contract: ${report.contractAddress}`));
     output.push(chalk.gray(`Generated: ${new Date(report.timestamp).toLocaleString()}\n`));
 
-    // GitHub Metrics Table
     const githubTable = new Table({
       head: [chalk.blue('GitHub Metrics'), chalk.yellow('Value')],
       style: { head: [], border: [] },
@@ -28,7 +27,6 @@ export function formatAsTable(reports: DevMetricsReport[]): string {
 
     output.push(githubTable.toString());
 
-    // Rootstock Metrics Table
     const rootstockTable = new Table({
       head: [chalk.blue('Rootstock Metrics'), chalk.yellow('Value')],
       style: { head: [], border: [] },

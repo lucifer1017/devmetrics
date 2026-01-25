@@ -9,7 +9,6 @@ import { validateRepo, validateContractAddress } from './utils/validation.js';
 import { formatReport } from './formatters/index.js';
 import { DevMetricsReport, OutputFormat } from './types/index.js';
 
-// Load environment variables
 dotenv.config();
 
 const program = new Command();
@@ -40,14 +39,12 @@ interface Options {
 async function main() {
   const options = program.opts<Options>();
 
-  // Validate network option
   if (options.network && !['mainnet', 'testnet'].includes(options.network.toLowerCase())) {
     console.error(chalk.red(`Invalid network: ${options.network}. Must be 'mainnet' or 'testnet'`));
     process.exit(1);
   }
   const network: Network = (options.network?.toLowerCase() as Network) || 'mainnet';
 
-  // Determine output format
   let outputFormat: OutputFormat = 'table';
   if (options.ci) {
     outputFormat = 'json';
@@ -61,7 +58,6 @@ async function main() {
     }
   }
 
-  // Parse repositories and contracts
   const repos = Array.isArray(options.repo) ? options.repo : options.repo ? [options.repo] : [];
   const contracts = Array.isArray(options.contract) 
     ? options.contract 
@@ -69,7 +65,6 @@ async function main() {
     ? [options.contract] 
     : [];
 
-  // Validate inputs
   if (repos.length === 0) {
     console.error(chalk.red('Error: At least one repository (--repo) is required'));
     program.help();
@@ -82,21 +77,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Support batch analysis: if multiple repos/contracts, pair them or use single contract for all
   const pairs: Array<{ repo: string; contract: string }> = [];
   
   if (repos.length === contracts.length) {
-    // Pair them up
     for (let i = 0; i < repos.length; i++) {
       pairs.push({ repo: repos[i], contract: contracts[i] });
     }
   } else if (contracts.length === 1) {
-    // Use single contract for all repos
     for (const repo of repos) {
       pairs.push({ repo, contract: contracts[0] });
     }
   } else if (repos.length === 1) {
-    // Use single repo for all contracts
     for (const contract of contracts) {
       pairs.push({ repo: repos[0], contract });
     }
@@ -105,7 +96,6 @@ async function main() {
     process.exit(1);
   }
 
-  // Validate all inputs
   const validationErrors: string[] = [];
   for (const pair of pairs) {
     const repoValidation = validateRepo(pair.repo);
@@ -125,25 +115,20 @@ async function main() {
     process.exit(1);
   }
 
-  // Initialize services
   const githubService = new GitHubService(options.githubToken);
   const rootstockService = new RootstockService(options.rpcUrl, network);
 
-  // Show network info in table mode
   if (outputFormat === 'table') {
     console.log(chalk.cyan(`🌐 Rootstock Network: ${chalk.bold(rootstockService.getNetwork().toUpperCase())}`));
     console.log(chalk.gray(`   RPC URL: ${rootstockService.getRpcUrl()}\n`));
   }
 
-  // Check authentication status and show helpful message
-  // Note: We check this before making requests, but token validity will be checked during requests
   const initialAuthStatus = githubService.isAuthenticated();
   if (!initialAuthStatus && outputFormat === 'table') {
     console.log(chalk.yellow('\n⚠️  No GitHub token detected. Using unauthenticated mode (60 requests/hour limit).'));
     console.log(chalk.yellow('   For 5,000 requests/hour, add a valid GITHUB_TOKEN to your .env file.\n'));
   }
 
-  // Show rate limit status if in table mode
   if (outputFormat === 'table') {
     try {
       const rateLimit = await githubService.getRateLimitStatus();
@@ -157,11 +142,9 @@ async function main() {
         }
       }
     } catch {
-      // Silently fail if we can't get rate limit
     }
   }
 
-  // Fetch metrics for all pairs
   const reports: DevMetricsReport[] = [];
   const errors: Array<{ pair: { repo: string; contract: string }; error: string }> = [];
 
@@ -171,10 +154,8 @@ async function main() {
         console.log(chalk.blue(`\n📊 Fetching metrics for ${pair.repo}...`));
       }
 
-      // Parse repo
       const [owner, repo] = pair.repo.split('/');
 
-      // Fetch GitHub metrics with progress indicator
       let githubMetrics;
       try {
         if (outputFormat === 'table') {
@@ -191,7 +172,6 @@ async function main() {
         throw error;
       }
 
-      // Fetch Rootstock metrics with progress indicator
       let rootstockMetrics;
       try {
         if (outputFormat === 'table') {
@@ -208,7 +188,6 @@ async function main() {
         throw error;
       }
 
-      // Create report
       const report: DevMetricsReport = {
         repository: pair.repo,
         contractAddress: pair.contract,
@@ -226,13 +205,11 @@ async function main() {
     }
   }
 
-  // Output results
   if (reports.length > 0) {
     const output = formatReport(reports, outputFormat);
     console.log(output);
   }
 
-  // Output errors if any
   if (errors.length > 0) {
     if (outputFormat === 'json') {
       console.error(JSON.stringify({ errors }, null, 2));
@@ -250,7 +227,6 @@ async function main() {
   }
 }
 
-// Run the CLI
 main().catch((error) => {
   console.error(chalk.red('Fatal error:'), error.message);
   process.exit(1);

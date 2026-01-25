@@ -79,7 +79,6 @@ export class GitHubService {
   }
 
   async getMetrics(owner: string, repo: string): Promise<GitHubMetrics> {
-    // Overall timeout for entire operation
     return Promise.race([
       this.fetchMetrics(owner, repo),
       new Promise<GitHubMetrics>((_, reject) =>
@@ -195,16 +194,12 @@ export class GitHubService {
         repository: `${owner}/${repo}`,
       };
     } catch (error: any) {
-      // Handle invalid/expired token (401)
       if (error.status === 401) {
         if (this.hasToken && !this.tokenInvalid) {
-          // Token is invalid, fallback to unauthenticated mode
           this.resetToUnauthenticated();
-          // Retry the request without authentication
           try {
             return await this.getMetrics(owner, repo);
           } catch (retryError: any) {
-            // If retry also fails, throw original error
             throw new Error(`GitHub token is invalid or expired. Falling back to unauthenticated mode (60 requests/hour limit). Original error: ${error.message}`);
           }
         } else {

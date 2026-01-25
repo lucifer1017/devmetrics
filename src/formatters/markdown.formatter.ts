@@ -10,7 +10,6 @@ export function formatAsMarkdown(reports: DevMetricsReport[]): string {
     output.push(`**Generated:** ${new Date(report.timestamp).toLocaleString()}`);
     output.push('');
 
-    // GitHub Metrics
     output.push('## 📊 GitHub Metrics');
     output.push('');
     output.push('| Metric | Value |');
@@ -22,7 +21,6 @@ export function formatAsMarkdown(reports: DevMetricsReport[]): string {
     output.push(`| 👥 Contributors | ${report.github.contributorCount} |`);
     output.push('');
 
-    // Rootstock Metrics
     output.push('## ⛓️ Rootstock Metrics');
     output.push('');
     output.push('| Metric | Value |');
