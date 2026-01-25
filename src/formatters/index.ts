@@ -1,7 +1,7 @@
-import { DevMetricsReport, OutputFormat } from '../types';
-import { formatAsTable } from './table.formatter';
-import { formatAsJSON } from './json.formatter';
-import { formatAsMarkdown } from './markdown.formatter';
+import { DevMetricsReport, OutputFormat } from '../types/index.js';
+import { formatAsTable } from './table.formatter.js';
+import { formatAsJSON } from './json.formatter.js';
+import { formatAsMarkdown } from './markdown.formatter.js';
 
 export function formatReport(reports: DevMetricsReport[], format: OutputFormat): string {
   switch (format) {

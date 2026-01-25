@@ -1,6 +1,6 @@
 import Table from 'cli-table3';
 import chalk from 'chalk';
-import { DevMetricsReport } from '../types';
+import { DevMetricsReport } from '../types/index.js';
 
 export function formatAsTable(reports: DevMetricsReport[]): string {
   const output: string[] = [];

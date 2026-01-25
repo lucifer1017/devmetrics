@@ -1,4 +1,4 @@
-import { DevMetricsReport } from '../types';
+import { DevMetricsReport } from '../types/index.js';
 
 export function formatAsMarkdown(reports: DevMetricsReport[]): string {
   const output: string[] = [];

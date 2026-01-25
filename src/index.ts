@@ -3,11 +3,11 @@
 import { Command } from 'commander';
 import dotenv from 'dotenv';
 import chalk from 'chalk';
-import { GitHubService } from './services/github.service';
-import { RootstockService, Network } from './services/rootstock.service';
-import { validateRepo, validateContractAddress } from './utils/validation';
-import { formatReport } from './formatters';
-import { DevMetricsReport, OutputFormat } from './types';
+import { GitHubService } from './services/github.service.js';
+import { RootstockService, Network } from './services/rootstock.service.js';
+import { validateRepo, validateContractAddress } from './utils/validation.js';
+import { formatReport } from './formatters/index.js';
+import { DevMetricsReport, OutputFormat } from './types/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -136,9 +136,11 @@ async function main() {
   }
 
   // Check authentication status and show helpful message
-  if (!githubService.isAuthenticated() && outputFormat === 'table') {
+  // Note: We check this before making requests, but token validity will be checked during requests
+  const initialAuthStatus = githubService.isAuthenticated();
+  if (!initialAuthStatus && outputFormat === 'table') {
     console.log(chalk.yellow('\n⚠️  No GitHub token detected. Using unauthenticated mode (60 requests/hour limit).'));
-    console.log(chalk.yellow('   For 5,000 requests/hour, add GITHUB_TOKEN to your .env file.\n'));
+    console.log(chalk.yellow('   For 5,000 requests/hour, add a valid GITHUB_TOKEN to your .env file.\n'));
   }
 
   // Show rate limit status if in table mode
@@ -172,11 +174,39 @@ async function main() {
       // Parse repo
       const [owner, repo] = pair.repo.split('/');
 
-      // Fetch GitHub metrics
-      const githubMetrics = await githubService.getMetrics(owner, repo);
+      // Fetch GitHub metrics with progress indicator
+      let githubMetrics;
+      try {
+        if (outputFormat === 'table') {
+          process.stdout.write(chalk.gray('   Fetching GitHub data... '));
+        }
+        githubMetrics = await githubService.getMetrics(owner, repo);
+        if (outputFormat === 'table') {
+          console.log(chalk.green('✓'));
+        }
+      } catch (error: any) {
+        if (outputFormat === 'table') {
+          console.log(chalk.red('✗'));
+        }
+        throw error;
+      }
 
-      // Fetch Rootstock metrics
-      const rootstockMetrics = await rootstockService.getMetrics(pair.contract);
+      // Fetch Rootstock metrics with progress indicator
+      let rootstockMetrics;
+      try {
+        if (outputFormat === 'table') {
+          process.stdout.write(chalk.gray('   Fetching Rootstock data... '));
+        }
+        rootstockMetrics = await rootstockService.getMetrics(pair.contract);
+        if (outputFormat === 'table') {
+          console.log(chalk.green('✓'));
+        }
+      } catch (error: any) {
+        if (outputFormat === 'table') {
+          console.log(chalk.red('✗'));
+        }
+        throw error;
+      }
 
       // Create report
       const report: DevMetricsReport = {
