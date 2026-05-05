@@ -184,6 +184,14 @@ node dist/index.js --repo owner/repo --contract 0xYourContractAddress --format j
 node dist/index.js --repo owner/repo --contract 0xYourContractAddress --ci
 ```
 
+`--ci` emits a single JSON envelope to stdout:
+`{ "reports": [...], "errors": [...], "meta": {...} }`
+
+Exit codes in `--ci` mode:
+- `0` = full success
+- `2` = partial success
+- `1` = full failure
+
 ### 4. Markdown Output
 ```bash
 node dist/index.js --repo owner/repo --contract 0xYourContractAddress --format markdown
@@ -214,14 +222,16 @@ node dist/index.js \
 # Via environment variable (recommended)
 export GITHUB_TOKEN=your_token_here
 node dist/index.js --repo owner/repo --contract 0xYourContractAddress
-
-# Via command line
-node dist/index.js --repo owner/repo --contract 0xYourContractAddress --github-token your_token_here
 ```
+
+> Avoid passing tokens with `--github-token` in shared environments because CLI args can appear in process lists and shell history.
 
 ### 7. Custom RPC URL
 ```bash
 node dist/index.js --repo owner/repo --contract 0xYourContractAddress --rpc-url https://your-custom-rpc.com
+
+# For localhost/private RPC endpoints, opt in explicitly
+node dist/index.js --repo owner/repo --contract 0xYourContractAddress --rpc-url http://127.0.0.1:8545 --allow-private-rpc
 ```
 
 ---

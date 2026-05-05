@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { RootstockMetrics } from '../types/index.js';
+import { redactRpcUrl, validateRpcUrlLiteral } from '../utils/rpc-url.js';
 
 export type Network = 'mainnet' | 'testnet';
 
@@ -11,7 +12,7 @@ export class RootstockService {
   private readonly MAX_DEPLOYMENT_SEARCH_BLOCKS = 10000; // Limit search to last 10k blocks (reduced)
   private readonly MAX_TRANSACTION_SEARCH_BLOCKS = 2000; // Limit transaction search (reduced)
 
-  constructor(rpcUrl?: string, network?: Network) {
+  constructor(rpcUrl?: string, network?: Network, allowPrivateRpc: boolean = false) {
     if (network) {
       this.network = network;
     } else if (rpcUrl) {
@@ -21,9 +22,12 @@ export class RootstockService {
     }
     
     if (rpcUrl) {
+      validateRpcUrlLiteral(rpcUrl, { allowPrivateRpc });
       this.rpcUrl = rpcUrl;
     } else {
-      this.rpcUrl = this.getRpcUrlForNetwork(this.network);
+      const envRpcUrl = this.getRpcUrlForNetwork(this.network);
+      validateRpcUrlLiteral(envRpcUrl, { allowPrivateRpc });
+      this.rpcUrl = envRpcUrl;
     }
 
     this.provider = new ethers.JsonRpcProvider(this.rpcUrl);
@@ -53,6 +57,10 @@ export class RootstockService {
    */
   getRpcUrl(): string {
     return this.rpcUrl;
+  }
+
+  getRedactedRpcUrl(): string {
+    return redactRpcUrl(this.rpcUrl);
   }
 
   /**
@@ -92,17 +100,14 @@ export class RootstockService {
         throw new Error(`Invalid contract address: ${contractAddress}`);
       }
 
-      const currentBlockPromise = this.withTimeout(this.provider.getBlockNumber(), 5000);
-      const deploymentBlockPromise = this.getDeploymentBlock(contractAddress);
-      
-      const currentBlock = await currentBlockPromise;
-      const deploymentBlock = await deploymentBlockPromise;
+      const currentBlock = await this.withTimeout(this.provider.getBlockNumber(), 5000);
+      const deploymentBlock = await this.getDeploymentBlock(contractAddress, currentBlock);
 
       if (deploymentBlock) {
         const [transactionCount, lastTransaction, gasUsagePatterns] = await Promise.allSettled([
-          this.getTransactionCount(contractAddress, deploymentBlock),
-          this.getLastTransaction(contractAddress, deploymentBlock),
-          this.getGasUsagePatterns(contractAddress, deploymentBlock),
+          this.getTransactionCount(contractAddress, deploymentBlock, currentBlock),
+          this.getLastTransaction(contractAddress, deploymentBlock, currentBlock),
+          this.getGasUsagePatterns(contractAddress, deploymentBlock, currentBlock),
         ]);
 
         return {
@@ -126,9 +131,8 @@ export class RootstockService {
     }
   }
 
-  private async getDeploymentBlock(contractAddress: string): Promise<number | null> {
+  private async getDeploymentBlock(contractAddress: string, currentBlock: number): Promise<number | null> {
     try {
-      const currentBlock = await this.withTimeout(this.provider.getBlockNumber(), 5000);
       const searchStartBlock = Math.max(0, currentBlock - this.MAX_DEPLOYMENT_SEARCH_BLOCKS);
       const currentCode = await this.withTimeout(this.provider.getCode(contractAddress, currentBlock), 5000);
       
@@ -187,12 +191,12 @@ export class RootstockService {
 
   private async getTransactionCount(
     contractAddress: string,
-    deploymentBlock: number | null
+    deploymentBlock: number | null,
+    currentBlock: number
   ): Promise<number> {
     try {
       if (!deploymentBlock) return 0;
 
-      const currentBlock = await this.withTimeout(this.provider.getBlockNumber(), 5000);
       const searchEndBlock = Math.min(currentBlock, deploymentBlock + this.MAX_TRANSACTION_SEARCH_BLOCKS);
       const sampleSize = 20;
       const step = Math.max(1, Math.floor((searchEndBlock - deploymentBlock) / sampleSize));
@@ -231,12 +235,12 @@ export class RootstockService {
 
   private async getLastTransaction(
     contractAddress: string,
-    deploymentBlock: number | null
+    deploymentBlock: number | null,
+    currentBlock: number
   ): Promise<string | null> {
     try {
       if (!deploymentBlock) return null;
 
-      const currentBlock = await this.withTimeout(this.provider.getBlockNumber(), 5000);
       const searchStep = 100;
       const maxBlocksToCheck = 500;
       const searchStartBlock = Math.max(deploymentBlock, currentBlock - maxBlocksToCheck);
@@ -272,14 +276,14 @@ export class RootstockService {
 
   private async getGasUsagePatterns(
     contractAddress: string,
-    deploymentBlock: number | null
+    deploymentBlock: number | null,
+    currentBlock: number
   ): Promise<{ average: number; min: number; max: number }> {
     try {
       if (!deploymentBlock) {
         return { average: 0, min: 0, max: 0 };
       }
 
-      const currentBlock = await this.withTimeout(this.provider.getBlockNumber(), 5000);
       const sampleSize = 20;
       const gasUsages: number[] = [];
       const searchStep = 50;
@@ -303,9 +307,12 @@ export class RootstockService {
             for (const tx of relevantTxs) {
               if (gasUsages.length >= sampleSize) break;
               if (typeof tx !== 'string') {
-                const txObj = tx as { gasUsed?: bigint | string | number };
-                if (txObj.gasUsed) {
-                  gasUsages.push(Number(txObj.gasUsed));
+                const txObj = tx as { hash?: string };
+                if (txObj.hash) {
+                  const receipt = await this.withTimeout(this.provider.getTransactionReceipt(txObj.hash), 3000);
+                  if (receipt?.gasUsed !== undefined && receipt?.gasUsed !== null) {
+                    gasUsages.push(Number(receipt.gasUsed));
+                  }
                 }
               }
             }

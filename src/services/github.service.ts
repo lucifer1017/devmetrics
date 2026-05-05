@@ -8,11 +8,18 @@ export class GitHubService {
   private readonly API_TIMEOUT = 15000; // 15 seconds per API call
   private readonly TOTAL_TIMEOUT = 60000; // 60 seconds total for all GitHub calls
 
-  constructor(token?: string) {
+  constructor(token?: string, silent: boolean = false) {
     const authToken = token || process.env.GITHUB_TOKEN;
     this.hasToken = !!authToken;
+    const noopLogger = {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    };
     this.octokit = new Octokit({
       auth: authToken,
+      log: noopLogger,
       request: {
         timeout: this.API_TIMEOUT,
       },
@@ -106,16 +113,6 @@ export class GitHubService {
         })
       );
 
-      // Fetch open issues with timeout
-      const { data: issues } = await this.withTimeout(
-        this.octokit.issues.listForRepo({
-          owner,
-          repo,
-          state: 'open',
-          per_page: 1,
-        })
-      );
-
       // Fetch open pull requests count with timeout
       const { data: pullRequests } = await this.withTimeout(
         this.octokit.pulls.list({
@@ -133,26 +130,17 @@ export class GitHubService {
       // Note: Search API counts as 1 request but gives accurate count
       // Without token, we use a simpler approach to save API calls
       let prsCount = 0;
-      if (this.hasToken) {
-        // With token: use search API for accurate count
-        try {
-          const { data: prSearch } = await this.withTimeout(
-            this.octokit.search.issuesAndPullRequests({
-              q: `repo:${owner}/${repo} type:pr state:open`,
-              per_page: 1,
-            })
-          );
-          prsCount = prSearch.total_count || 0;
-        } catch {
-          // Fallback: estimate from repo data if available
-          // Note: repoData doesn't have separate PR count, so we use a basic estimate
-          prsCount = pullRequests.length > 0 ? pullRequests.length : 0;
-        }
-      } else {
-        // Without token: use minimal approach - just check if there are any PRs
-        // This saves API calls (search API might be more expensive)
+      try {
+        const { data: prSearch } = await this.withTimeout(
+          this.octokit.search.issuesAndPullRequests({
+            q: `repo:${owner}/${repo} type:pr state:open`,
+            per_page: 1,
+          })
+        );
+        prsCount = prSearch.total_count || 0;
+      } catch {
+        // Fallback when search endpoint is unavailable/rate-limited.
         prsCount = pullRequests.length > 0 ? pullRequests.length : 0;
-        // Note: This is an estimate, not exact count, but saves rate limit
       }
 
       // Get contributors count with timeout
